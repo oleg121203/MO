@@ -1,1 +1,6 @@
-Executed script. Entry point: main.py
+env_folder: venv
+python_version: 3.12
+files_to_scan: main.py, modules
+entry_point: main.py
+config_output: config_output.txt
+bootstrap_dependencies: pipreqs==0.4.11

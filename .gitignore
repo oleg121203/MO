@@ -1,0 +1,12 @@
+# Ignore unnecessary files and directories
+
+*.pyc
+__pycache__
+build/
+dist/
+venv/
+requirements.txt
+config.py
+requirements.txt
+my_project/
+...

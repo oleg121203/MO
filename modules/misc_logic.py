@@ -1,32 +1,24 @@
-from PyQt6.QtWidgets import (
-from PyQt6.QtCore import (
-from PyQt6.QtGui import (
-from qasync import QEventLoop, asyncSlot
-
-
-
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QProgressBar, QListWidget, QListWidgetItem,
-    QTableWidget, QTableWidgetItem, QScrollArea, QMessageBox,
-    QLineEdit, QSlider, QComboBox, QFormLayout, QTabWidget, QFileDialog,
-    QDialog
-)
-    Qt, QPoint, pyqtSignal, QObject, QTimer
-)
-    QColor, QBrush, QFont, QPainter, QPen
-)
-
-    Channel, UserStatusOffline, UserStatusOnline, UserStatusRecently,
-    UserStatusLastMonth, UserStatusLastWeek
-)
-
+from __future__ import annotations  # Повинно бути першим
+import sys
+import os
+import json
+import traceback
+import logging
+from functools import wraps
+from datetime import datetime
+from typing import Tuple, List, Dict, Any
+import asyncio
+import pandas as pd
+from PyPDF2 import PdfReader
+from bs4 import BeautifulSoup
+from modules.mdb1_database import DatabaseModule
+from modules.config_manager import ConfigManager
 
 # Создание переводов
 translations = {
     'en': {
         'control_interface': 'Control Interface',
         'database_connected': 'Database Connected',
-        'telegram_connected': 'Telegram Connected',
         'smart_search': 'Smart Search',
         'search_accounts': 'Search Accounts',
         'pause': '⏸ Pause',
@@ -58,7 +50,6 @@ translations = {
         'added_new_groups': 'Added new groups',
         'no_new_groups_found': 'No new groups found to add.',
         'status': 'Status',
-        'code_from_telegram': 'Enter the code from Telegram:',
         'password': 'Enter your password:',
         'confirmation_code': 'Confirmation Code',
         'cancelled_by_user': 'Cancelled by user.',
@@ -67,10 +58,8 @@ translations = {
         'group_updated': 'Group updated in database.',
         'account_updated': 'Account updated in database.',
         'failed_to_connect_db': 'Failed to connect to the database.',
-        'disconnected_from_telegram': 'Disconnected from Telegram.',
         'disconnected_from_db': 'Disconnected from the database.',
         'process_stopped': 'Process stopped.',
-        'no_connection_telegram': 'No connection to Telegram.',
         'load_groups_first': 'Load the groups first.',
         'searching_public_groups': 'Searching public groups...',
         'searching_keyword': 'Searching for keyword',
@@ -103,7 +92,6 @@ translations = {
     'uk': {
         'control_interface': 'Контрольний Інтерфейс',
         'database_connected': 'База Даних Підключена',
-        'telegram_connected': 'Telegram Підключено',
         'smart_search': 'Розумний Пошук',
         'search_accounts': 'Пошук Акаунтів',
         'pause': '⏸ Пауза',
@@ -135,7 +123,6 @@ translations = {
         'added_new_groups': 'Додано нові групи',
         'no_new_groups_found': 'Не знайдено нових груп для додавання.',
         'status': 'Статус',
-        'code_from_telegram': 'Введіть код з Telegram:',
         'password': 'Введіть ваш пароль:',
         'confirmation_code': 'Код Підтвердження',
         'cancelled_by_user': 'Скасовано користувачем.',
@@ -144,10 +131,8 @@ translations = {
         'group_updated': 'Групу оновлено в базі даних.',
         'account_updated': 'Акаунт оновлено в базі даних.',
         'failed_to_connect_db': 'Не вдалося підключитися до бази даних.',
-        'disconnected_from_telegram': 'Відключено від Telegram.',
         'disconnected_from_db': 'Відключено від бази даних.',
         'process_stopped': 'Процес зупинено.',
-        'no_connection_telegram': 'Немає підключення до Telegram.',
         'load_groups_first': 'Спочатку завантажте групи.',
         'searching_public_groups': 'Пошук публічних груп...',
         'searching_keyword': 'Пошук за ключовим словом',
@@ -274,7 +259,6 @@ class ConfigGUI(QDialog):
 
         # Вкладка "Общие" (General)
         general_layout = QFormLayout()
-        # Поля конфигурации Telegram
         self.api_id_input = QLineEdit()
         self.api_hash_input = QLineEdit()
         self.phone_number_input = QLineEdit()
@@ -860,7 +844,6 @@ class MainWindow(QMainWindow):
         self.update_translations()
         self.load_interface_settings()
 
-        # Попытка подключиться к Telegram при запуске
         if not self.tg_connected:
             asyncio.create_task(self.connect_to_telegram())
 
@@ -952,7 +935,6 @@ class MainWindow(QMainWindow):
         db_layout.addWidget(self.db_light)
         db_layout.addWidget(db_light_label)
 
-        # Индикатор подключения к Telegram
         self.tg_light = TrafficLightWidget(parent=self.top_bar, initial_state="green" if self.tg_connected else "off", size=(30, 30))
         tg_light_label = QLabel(self.translate('telegram_connected'))
         tg_light_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -1030,15 +1012,12 @@ class MainWindow(QMainWindow):
         # Задержка на 5 секунд для симуляции проверки
         await asyncio.sleep(5)
 
-        # Проверка подключения к Telegram
         if await self.telegram_module.is_connected():
             self.tg_connected = True
             self.tg_light.set_state("green")
-            logging.debug("Telegram connection is active.")
         else:
             self.tg_connected = False
             self.tg_light.set_state("red")
-            logging.warning("Telegram connection lost.")
 
         # Проверка подключения к базе данных
         if await self.db_module.is_connected():
@@ -1090,7 +1069,6 @@ class MainWindow(QMainWindow):
 
     @telegram_activity_indicator
     async def connect_to_telegram(self):
-     """Асинхронний метод для підключення до Telegram."""
      try:
         await self.telegram_module.connect()
 
@@ -1118,13 +1096,10 @@ class MainWindow(QMainWindow):
         self.tg_connected = True
         self.tg_light.set_state("green")
         self.status_label.setText(f"{self.translate('status')}: {self.translate('telegram_connected')}.")
-        logging.info("Connection to Telegram established.")
      except Exception as e:
         self.tg_connected = False
         self.tg_light.set_state("off")
         self.status_label.setText(f"{self.translate('status')}: {e}")
-        logging.error(f"Error connecting to Telegram: {e}")
-        QMessageBox.critical(self, self.translate('error'), f"{self.translate('error')} connecting to Telegram: {e}")
 
     def parse_keywords(self, keywords):
      phrases = [phrase.strip() for phrase in keywords.split(',') if phrase.strip()]
@@ -1425,7 +1400,6 @@ class MainWindow(QMainWindow):
         return
 
      try:
-        # Переконємося, що з'єднання з Telegram встановлено
         if not await self.telegram_module.is_connected():
             await self.telegram_module.connect()
 
@@ -1532,7 +1506,6 @@ class MainWindow(QMainWindow):
         self.status_label.setText(f"{self.translate('status')}: {self.translate('search_completed')}")
         logging.info("Account search completed.")
 
-     except aiosqlite.OperationalError as db_error:
         self.tg_connected = False
         self.tg_light.set_state("off")
         self.status_label.setText(f"{self.translate('status')}: {db_error}")
@@ -1798,7 +1771,6 @@ class MainWindow(QMainWindow):
         self.status_label.setText(f"{self.translate('status')}: {self.translate('process_stopped')}")
         logging.info(self.translate('process_stopped_on_exit'))
 
-        # Відключення від Telegram
         if self.telegram_module:
             await self.telegram_module.disconnect()
             logging.info(self.translate('disconnected_from_telegram'))
@@ -1895,19 +1867,18 @@ if __name__ == "__main__":
         user=config_manager.config.get('database', {}).get('user'),
         password=config_manager.config.get('database', {}).get('password'),
         database=config_manager.config.get('database', {}).get('database')
-    )
-    telegram_module = TelegramModule(
+         
         api_id=config_manager.config.get('telegram', {}).get('api_id'),
         api_hash=config_manager.config.get('telegram', {}).get('api_hash'),
         phone_number=config_manager.config.get('telegram', {}).get('phone_number')
-    )
+        )
+  
 
     # Попытка подключиться к базе данных
     loop.run_until_complete(db_module.connect())
 
     # Проверка начальных соединений
     db_connected = loop.run_until_complete(db_module.is_connected())
-    tg_connected = False  # Будет обновлено после подключения к Telegram
 
     # Создание и отображение главного окна
     main_window = MainWindow(
