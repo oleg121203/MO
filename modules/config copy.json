@@ -6,13 +6,13 @@
         "database": "test_db"
     },
     "telegram": {
-        "api_id": "21925591",
-        "api_hash": "a6343c7b82790c7b741b9837e8f9601a",
-        "phone_number": "+380969999070"
+        "api_id": "26292865",
+        "api_hash": "c3c399387f2768f75a0e1515e420dce4",
+        "phone_number": "18888412187"
     },
     "interface": {
         "transparency": 100,
         "language": "uk",
-        "theme": "hacker"
+        "theme": "friendly"
     }
 }

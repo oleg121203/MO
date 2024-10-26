@@ -4,8 +4,8 @@ import logging
 import tracemalloc
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from modules.config_manager import ConfigManager
-from modules.mdb1_database import DatabaseModule
-from modules.mt1_telegram import TelegramModule
+from modules.mdb1_database import Database
+from modules.mt1_telegram import Telegram
 from modules.gui import ConfigGUI, MainWindow
 import qasync
 
